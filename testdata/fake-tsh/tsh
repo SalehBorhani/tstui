@@ -277,7 +277,12 @@ case "$cmd" in
         exit "${FAKE_TSH_SSH_EXIT:-0}" ;;
       *)
         export PS1="${login}@${host}:\w\$ "
-        exec bash --norc --noprofile -i ;;
+        # Like a remote shell over ssh with a PTY: its stderr (an
+        # interactive bash writes the prompt and the echo there) comes back
+        # through the PTY with its stdout. Without this, a caller that
+        # gives tsh a separate stderr pipe reads two streams in a
+        # nondeterministic order and the screen is garbled.
+        exec bash --norc --noprofile -i 2>&1 ;;
     esac
     ;;
   scp)
