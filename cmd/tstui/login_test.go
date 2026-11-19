@@ -115,16 +115,11 @@ func newLoginOnlyEnv(t *testing.T, scenario string) *loginOnlyEnv {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		t.Skip("the fake tsh is a bash script run in a pseudo-terminal")
 	}
-	fakeDir, err := filepath.Abs(filepath.Join("..", "..", "testdata", "fake-tsh"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// exec looks tsh up in this process's PATH, not in the child's.
-	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	useFakeTsh(t)
 	home := t.TempDir()
 	e := &loginOnlyEnv{argvLog: filepath.Join(home, "argv.log"), logFile: filepath.Join(home, "tstui.log")}
 	e.environ = []string{
-		"PATH=" + fakeDir + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"PATH=" + os.Getenv("PATH"), // useFakeTsh put the fake first
 		"HOME=" + home,
 		"TELEPORT_HOME=" + home,
 		"FAKE_TSH_STATE=logged-out",

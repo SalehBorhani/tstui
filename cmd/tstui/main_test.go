@@ -190,11 +190,7 @@ func TestRunWithFakeTsh(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake tsh is a bash script")
 	}
-	fakeDir, err := filepath.Abs(filepath.Join("..", "..", "testdata", "fake-tsh"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	useFakeTsh(t)
 
 	tests := []struct {
 		state   string
@@ -231,7 +227,21 @@ func TestRunWithFakeTsh(t *testing.T) {
 	}
 }
 
+// useFakeTsh puts the fake tsh script first on PATH for the test. A test
+// that gets past run's "is tsh installed" check needs it: CI runners have
+// no real tsh, and with one installed the test would use it instead. exec
+// looks the binary up in this process's PATH, not in a child's environment.
+func useFakeTsh(t *testing.T) {
+	t.Helper()
+	fakeDir, err := filepath.Abs(filepath.Join("..", "..", "testdata", "fake-tsh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 func TestRunBadConfig(t *testing.T) {
+	useFakeTsh(t)
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte("bogus_key: 1\n"), 0o600); err != nil {
 		t.Fatal(err)
