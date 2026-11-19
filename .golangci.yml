@@ -1,0 +1,36 @@
+version: "2"
+
+run:
+  modules-download-mode: vendor
+
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - nolintlint
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    gosec:
+      excludes:
+        - G204 # tsh is run with an argv we build; no shell is involved
+        - G304 # reading files at user-given paths (config, password file) is the point
+        - G703 # same as G304, taint-analysis variant
+    revive:
+      rules:
+        - name: exported
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck, unparam]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

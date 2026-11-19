@@ -1,0 +1,38 @@
+# ocean: deep blues and teal on a dark background.
+#
+# Copy to ~/.config/tstui/skins/ocean.yaml, then start with --skin ocean
+# or type :skin ocean. The file name is the skin name.
+#
+# `base` is the built-in skin the colours below change: default, light or
+# high-contrast. Colours are W3C names (dodgerblue), #rrggbb, or default
+# (the terminal's own colour). Any key left out keeps the base's colour.
+base: default
+colors:
+  bg: default
+  fg: "#9fb8c8"
+  border: "#1f6f8b"
+  border_focus: "#4fd1c5"
+  title: "#4fd1c5"
+  counter: "#e2e8f0"
+  info_label: "#f6ad55"
+  info_value: "#e2e8f0"
+  menu_key: "#4fd1c5"
+  menu_text: "#e2e8f0"
+  table_fg: "#90cdf4"
+  table_header: "#e2e8f0"
+  table_cursor_fg: "#0b1e2d"
+  table_cursor_bg: "#4fd1c5"
+  dialog_fg: "#9fb8c8"
+  dialog_label: "#e2e8f0"
+  dialog_field: "#e2e8f0"
+  dialog_placeholder: "#5a7184"
+  button_fg: "#0b1e2d"
+  button_bg: "#1f6f8b"
+  button_focus_fg: "#0b1e2d"
+  button_focus_bg: "#4fd1c5"
+  ok: "#68d391"
+  warn: "#f6ad55"
+  error: "#fc8181"
+  info: "#90cdf4"
+  logo_from: "#4fd1c5"
+  logo_to: "#1f6f8b"

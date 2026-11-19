@@ -1,0 +1,294 @@
+#!/usr/bin/env bash
+# Fake tsh for tests and for running tstui without a Teleport cluster:
+#   PATH="$PWD/testdata/fake-tsh:$PATH" tstui
+#
+# Output shapes were captured from tsh v18.11.3 (see docs/tsh-notes.md);
+# `ls` and `clusters` output match what a v18 cluster printed (2026-11-18).
+# Login prompts use the wording found in the v18.11.3 binary; the exact
+# line endings are a guess.
+#
+# Environment knobs:
+#   FAKE_TSH_STATE     valid (default) | expiring | expired | logged-out | denied
+#                      `login` and `logout` override it through a state file
+#                      in $TELEPORT_HOME (when set), so status follows them.
+#   FAKE_TSH_SLEEP     seconds to sleep before answering (timeout tests)
+#   FAKE_TSH_ARGV_LOG  file that gets one line per invocation with argv and
+#                      the names of TSTUI_* env vars visible to the process
+#   FAKE_TSH_OLD       if set, behave like an old tsh without --client
+#   FAKE_TSH_CLUSTERS  none: `clusters` fails, as if tsh could not list them.
+#                      Otherwise it prints clusters.json: root afr-prod, leaf
+#                      hwb-prod (online, ls-hwb-prod.json) and leaf old-dc
+#                      (offline). `ls --cluster=X` prints ls-X.json, or
+#                      ls.json for the root.
+#
+# Login knobs (`tsh login` is interactive; run it in a terminal):
+#   FAKE_TSH_LOGIN     otp (default) | password | webauthn | otp-or-tap | pin |
+#                      choice | reprompt | hang | locked | network | tls |
+#                      connector
+#   FAKE_TSH_PASSWORD  expected password (default hunter2)
+#   FAKE_TSH_OTP       expected OTP code (default 123456)
+#   FAKE_TSH_PIN       expected security key PIN (default 1234)
+#   FAKE_TSH_TAP_DELAY seconds before the simulated key touch (default 0.3)
+#   FAKE_TSH_TERM_QUERY  if set, start like tsh v18: write the terminal queries
+#                      ESC]11;? and ESC[6n (no newline) and wait up to this many
+#                      seconds for the cursor position reply
+#   FAKE_TSH_PROMPT_DELAY seconds to wait before the password prompt
+#   FAKE_TSH_PROMPT_NONL  if set, end the password prompt without a newline
+#                      (v18.11.3 ends it with ":" and a newline)
+#
+# SSH knobs (`tsh ssh [flags] login@host`, run it in a terminal):
+#   FAKE_TSH_SSH       shell (default: an interactive bash posing as the node) |
+#                      exit | denied | unreachable | expired | mfa | notfound
+#   FAKE_TSH_SSH_EXIT  exit status for FAKE_TSH_SSH=exit (default 0)
+#
+# Non-interactive knobs:
+#   `tsh ssh login@host cmd...` prints "<host>: <cmd>" and exits 0;
+#   FAKE_TSH_EXEC_FAIL=host1,host2 makes those hosts print an error and exit 3,
+#   FAKE_TSH_EXEC_SLEEP sleeps that many seconds first (timeout tests).
+#   `tsh ssh -N --forward=SPEC login@host` blocks like a forward until killed;
+#   FAKE_TSH_FORWARD=fail makes it fail at once with a bind error.
+#   `tsh scp [-r] FROM TO` prints nothing and exits 0;
+#   FAKE_TSH_SCP=fail makes it fail with "no such file or directory".
+# Errors go to stderr in tsh's format. The ERROR texts are modelled on
+# Teleport's source and are not verified (docs/tsh-notes.md).
+set -u
+
+dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+state="${FAKE_TSH_STATE:-valid}"
+statefile=""
+if [[ -n "${TELEPORT_HOME:-}" ]]; then
+  statefile="$TELEPORT_HOME/fake-tsh-state"
+  [[ -f "$statefile" ]] && state="$(<"$statefile")"
+fi
+
+if [[ -n "${FAKE_TSH_ARGV_LOG:-}" ]]; then
+  envnames="$(env | cut -d= -f1 | grep '^TSTUI_' | tr '\n' ' ')"
+  printf 'argv: %s | env: %s\n' "$*" "$envnames" >>"$FAKE_TSH_ARGV_LOG"
+fi
+
+[[ -n "${FAKE_TSH_SLEEP:-}" ]] && sleep "$FAKE_TSH_SLEEP"
+
+err() { printf '\033[31mERROR: \033[0m%s\n\n' "$1" >&2; exit 1; }
+
+cmd="${1:-}"
+shift || true
+client=0 proxy="" user="${USER:-ali}" authc="" cluster=""
+for a in "$@"; do
+  case "$a" in
+    --cluster=*) cluster="${a#--cluster=}" ;;
+    --client)
+      [[ -n "${FAKE_TSH_OLD:-}" ]] && err "unknown long flag '--client'"
+      client=1 ;;
+    --proxy=*) proxy="${a#--proxy=}" ;;
+    --user=*) user="${a#--user=}" ;;
+    --auth=*) authc="${a#--auth=}" ;;
+  esac
+done
+
+# valid_until in RFC 3339; GNU date first, then BSD date.
+future() { date -u -d "+$1 minutes" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v+"$1"M +%Y-%m-%dT%H:%M:%SZ; }
+
+setstate() { [[ -n "$statefile" ]] && printf '%s' "$1" >"$statefile"; return 0; }
+
+# read_secret VAR: read one line with echo off.
+read_secret() {
+  IFS= read -r -s "$1" || err "failed to read input"
+  [[ -n "${FAKE_TSH_PROMPT_NONL:-}" ]] && printf '\n' >&2
+  return 0
+}
+
+# term_query: like tsh's colour detection, ask the terminal for its
+# background colour and cursor position, then wait for the reply (which
+# ends in R) or give up after FAKE_TSH_TERM_QUERY seconds.
+term_query() {
+  local c reply=""
+  printf '\033]11;?\033\\\033[6n'
+  while IFS= read -r -s -n 1 -t "$FAKE_TSH_TERM_QUERY" c; do
+    reply+="$c"
+    [[ "$c" == R ]] && break
+  done
+  return 0
+}
+
+tap() {
+  sleep "${FAKE_TSH_TAP_DELAY:-0.3}"
+  printf 'Detected security key tap\n' >&2
+}
+
+login() {
+  local pw otp pin pick tries=1
+  [[ -n "${FAKE_TSH_TERM_QUERY:-}" ]] && term_query
+  [[ -n "${FAKE_TSH_PROMPT_DELAY:-}" ]] && sleep "$FAKE_TSH_PROMPT_DELAY"
+  case "${FAKE_TSH_LOGIN:-otp}" in
+    network) err "dial tcp ${proxy:-127.0.0.1:1}: connect: connection refused" ;;
+    tls) err "Get \"https://${proxy}/webapi/ping\": tls: failed to verify certificate: x509: certificate signed by unknown authority" ;;
+    connector) err "connector \"${authc:-default}\" not found" ;;
+    choice)
+      printf '[1] %s\n[2] bob\n' "$user" >&2
+      printf 'Choose the user for login [1]: ' >&2
+      IFS= read -r pick || err "failed to read input"
+      [[ "$pick" == 1 || "$pick" == "$user" ]] || err "invalid choice \"$pick\""
+      tap
+      login_ok
+      return ;;
+  esac
+
+  pw_prompt
+  read_secret pw
+  if [[ "${FAKE_TSH_LOGIN:-otp}" == reprompt ]]; then
+    while [[ "$pw" != "${FAKE_TSH_PASSWORD:-hunter2}" && $tries -lt 3 ]]; do
+      tries=$((tries + 1))
+      pw_prompt
+      read_secret pw
+    done
+  fi
+  [[ "$pw" == "${FAKE_TSH_PASSWORD:-hunter2}" ]] || err "invalid username or password"
+
+  case "${FAKE_TSH_LOGIN:-otp}" in
+    password|reprompt) ;;
+    otp)
+      printf 'Enter an OTP code from a device:\n' >&2
+      read_secret otp
+      [[ "$otp" == "${FAKE_TSH_OTP:-123456}" ]] || err "invalid username, password or second factor" ;;
+    webauthn)
+      printf 'Tap any security key\n' >&2
+      tap ;;
+    otp-or-tap)
+      printf 'Tap any security key or enter a code from a OTP device\n' >&2
+      if IFS= read -r -s -t "${FAKE_TSH_TAP_DELAY:-0.3}" otp; then
+        [[ "$otp" == "${FAKE_TSH_OTP:-123456}" ]] || err "invalid username, password or second factor"
+      else
+        printf 'Detected security key tap\n' >&2
+      fi ;;
+    pin)
+      printf 'Tap any security key\n' >&2
+      tap
+      printf 'Enter your security key PIN:\n' >&2
+      read_secret pin
+      [[ "$pin" == "${FAKE_TSH_PIN:-1234}" ]] || err "security key PIN is incorrect" ;;
+    hang) sleep 3600 ;;
+    locked) err "too many incorrect attempts, please try again later" ;;
+    *) err "fake tsh: unknown FAKE_TSH_LOGIN '${FAKE_TSH_LOGIN}'" ;;
+  esac
+  login_ok
+}
+
+pw_prompt() {
+  if [[ -n "${FAKE_TSH_PROMPT_NONL:-}" ]]; then
+    printf 'Enter password for Teleport user %s:' "$user" >&2
+  else
+    printf 'Enter password for Teleport user %s:\n' "$user" >&2
+  fi
+}
+
+login_ok() {
+  setstate valid
+  cat <<EOF
+> Profile URL:        https://${proxy}
+  Logged in as:       ${user}
+  Cluster:            afr-prod
+  Roles:              access, editor
+  Logins:             ${user}
+  Valid until:        $(future 720) [valid for 12h0m0s]
+EOF
+}
+
+case "$cmd" in
+  version)
+    if [[ $client == 1 ]]; then
+      cat "$dir/version-client.json"
+    else
+      cat "$dir/version.json"
+    fi
+    ;;
+  status)
+    case "$state" in
+      logged-out) err "Not logged in." ;;
+      expired)
+        sed "s/__VALID_UNTIL__/2020-01-01T00:00:00Z/" "$dir/status.json"
+        err "Active profile expired." ;;
+      expiring)
+        sed "s/__VALID_UNTIL__/$(future 10)/" "$dir/status.json" ;;
+      *)
+        sed "s/__VALID_UNTIL__/$(future 480)/" "$dir/status.json" ;;
+    esac
+    ;;
+  ls)
+    case "$state" in
+      logged-out) err "Not logged in." ;;
+      expired) err "ssh: cert has expired" ;;
+      denied) err "access denied to perform action \"list\" on \"node\"" ;;
+      *)
+        if [[ -z "$cluster" || "$cluster" == afr-prod ]]; then
+          cat "$dir/ls.json"
+        elif [[ "$cluster" =~ ^[a-z0-9.-]+$ && -f "$dir/ls-$cluster.json" ]]; then
+          cat "$dir/ls-$cluster.json"
+        else
+          err "cluster \"$cluster\" is not found"
+        fi ;;
+    esac
+    ;;
+  clusters)
+    case "$state" in
+      logged-out) err "Not logged in." ;;
+      expired) err "ssh: cert has expired" ;;
+    esac
+    [[ "${FAKE_TSH_CLUSTERS:-}" == none ]] && err "access denied to perform action \"list\" on \"remote_cluster\""
+    cat "$dir/clusters.json" ;;
+  login)
+    login ;;
+  ssh)
+    target="" remote=() noexec=0
+    for a in "$@"; do
+      if [[ -z "$target" ]]; then
+        case "$a" in
+          -N|--no-remote-exec) noexec=1 ;;
+          -*) ;;
+          *) target="$a" ;;
+        esac
+      else
+        remote+=("$a")
+      fi
+    done
+    login="${target%@*}" host="${target#*@}"
+    [[ "$state" == expired ]] && err "ssh: cert has expired"
+    [[ "$state" == logged-out ]] && err "Not logged in."
+    if [[ $noexec == 1 ]]; then
+      [[ "${FAKE_TSH_FORWARD:-}" == fail ]] && err "listen tcp 127.0.0.1: bind: address already in use"
+      exec sleep 3600
+    fi
+    if [[ ${#remote[@]} -gt 0 ]]; then
+      [[ -n "${FAKE_TSH_EXEC_SLEEP:-}" ]] && sleep "$FAKE_TSH_EXEC_SLEEP"
+      if [[ ",${FAKE_TSH_EXEC_FAIL:-}," == *",${host},"* ]]; then
+        printf '%s: command failed\n' "$host" >&2
+        exit 3
+      fi
+      printf '%s: %s\n' "$host" "${remote[*]}"
+      exit 0
+    fi
+    case "${FAKE_TSH_SSH:-shell}" in
+      denied) err "access denied to ${login} connecting to ${host} on cluster afr-prod" ;;
+      unreachable) err "failed to dial: dial tcp 10.0.1.11:3022: connect: no route to host" ;;
+      expired) err "ssh: cert has expired" ;;
+      mfa) err "MFA is required to access this resource but this client does not support it" ;;
+      notfound) err "node \"${host}\" not found" ;;
+      exit)
+        printf 'connected to %s as %s\n' "$host" "$login"
+        exit "${FAKE_TSH_SSH_EXIT:-0}" ;;
+      *)
+        export PS1="${login}@${host}:\w\$ "
+        exec bash --norc --noprofile -i ;;
+    esac
+    ;;
+  scp)
+    [[ "$state" == expired ]] && err "ssh: cert has expired"
+    [[ "$state" == logged-out ]] && err "Not logged in."
+    [[ "${FAKE_TSH_SCP:-}" == fail ]] && err "open /nonexistent: no such file or directory"
+    exit 0 ;;
+  logout)
+    [[ "$state" == logged-out ]] && err "Not logged in."
+    setstate logged-out
+    printf 'Logged out %s from %s.\n' "$user" "${proxy:-all proxies}" ;;
+  *)
+    err "fake tsh: unsupported command '$cmd'" ;;
+esac

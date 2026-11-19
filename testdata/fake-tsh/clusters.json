@@ -1,0 +1,23 @@
+[
+  {
+    "cluster_name": "afr-prod",
+    "status": "online",
+    "cluster_type": "root",
+    "labels": null,
+    "selected": true
+  },
+  {
+    "cluster_name": "hwb-prod",
+    "status": "online",
+    "cluster_type": "leaf",
+    "labels": null,
+    "selected": false
+  },
+  {
+    "cluster_name": "old-dc",
+    "status": "offline",
+    "cluster_type": "leaf",
+    "labels": null,
+    "selected": false
+  }
+]

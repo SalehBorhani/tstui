@@ -1,0 +1,47 @@
+{
+  "active": {
+    "profile_url": "https://tp.afr.example:443",
+    "username": "ali",
+    "cluster": "afr-prod",
+    "roles": [
+      "access",
+      "editor"
+    ],
+    "traits": {
+      "aws_role_arns": null,
+      "azure_identities": null,
+      "db_names": null,
+      "db_roles": null,
+      "db_users": null,
+      "gcp_service_accounts": null,
+      "host_user_gid": [
+  ""
+],
+      "host_user_uid": [
+  ""
+],
+      "kubernetes_groups": null,
+      "kubernetes_users": null,
+      "logins": [
+  "ali",
+  "root"
+],
+      "mcp_tools": null,
+      "windows_logins": null
+    },
+    "logins": [
+      "ali",
+      "root"
+    ],
+    "kubernetes_enabled": true,
+    "valid_until": "__VALID_UNTIL__",
+    "extensions": [
+      "login-ip",
+      "permit-agent-forwarding",
+      "permit-port-forwarding",
+      "permit-pty",
+      "private-key-policy"
+    ]
+  },
+  "profiles": []
+}

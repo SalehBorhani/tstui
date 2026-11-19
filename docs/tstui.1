@@ -1,0 +1,165 @@
+.TH TSTUI 1 "2026-11-19" "tstui 0.1.0" "User Commands"
+.SH NAME
+tstui \- k9s-style terminal UI for Teleport SSH
+.SH SYNOPSIS
+.B tstui
+.RB [ \-\-proxy
+.IR HOST:PORT | NAME ]
+.RB [ \-\-user
+.IR NAME ]
+.RB [ \-\-password\-stdin " | " \-\-password\-file
+.IR PATH " | " \fB\-\-password\fR " " PASS ]
+.RB [ \-\-mfa\-token
+.IR CODE ]
+.RB [ \-\-auth
+.IR CONNECTOR ]
+.RB [ \-\-insecure ]
+.RB [ \-\-config
+.IR PATH ]
+.RB [ \-\-skin
+.IR NAME ]
+.RB [ \-\-version ]
+.SH DESCRIPTION
+.B tstui
+wraps
+.BR tsh (1),
+Teleport's command-line client, in a terminal UI. It lists the servers of
+the current proxy and its leaf clusters, opens SSH sessions in an embedded
+terminal with tabs and split panes, and logs in through a popup that asks
+for the user, password and MFA code, or waits for a security key touch.
+It also transfers files, runs port forwards, and runs one command on many
+servers.
+.PP
+.B tsh
+must be on
+.BR PATH .
+tstui runs it for everything and never talks to Teleport by itself, except
+for the unauthenticated
+.I /webapi/ping
+health check.
+.SH OPTIONS
+.TP
+.BI \-\-proxy " HOST:PORT|NAME"
+The Teleport proxy, or the name of a proxy in the config file.
+.TP
+.BI \-\-user " NAME"
+The Teleport user.
+.TP
+.B \-\-password\-stdin
+Read the password from standard input.
+.TP
+.BI \-\-password\-file " PATH"
+Read the password from a file. tstui warns when the file is readable by
+other users.
+.TP
+.BI \-\-password " PASS"
+The password. Supported, but tstui prints a warning: the value shows in
+shell history and the process list.
+.TP
+.BI \-\-mfa\-token " CODE"
+A one-time code for MFA.
+.TP
+.BI \-\-auth " CONNECTOR"
+The auth connector, as for
+.BR "tsh \-\-auth" .
+.TP
+.B \-\-insecure
+Skip TLS certificate verification. For test clusters only.
+.TP
+.BI \-\-config " PATH"
+The config file. Default
+.IR $XDG_CONFIG_HOME/tstui/config.yaml .
+.TP
+.BI \-\-skin " NAME"
+.BR default ,
+.BR light ,
+.BR high\-contrast ,
+or a skin file's name.
+.TP
+.B \-\-version
+Print the version and exit.
+.PP
+Anything needed to log in that is not given is asked for in the login
+popup, never on the plain terminal.
+.SH ENVIRONMENT
+.TP
+.B TSTUI_PROXY ", " TSTUI_USER ", " TSTUI_PASSWORD ", " TSTUI_MFA
+Login values. Flags take precedence over the environment, and the
+environment over the config file. tstui removes
+.B TSTUI_PASSWORD
+and
+.B TSTUI_MFA
+from the environment of every process it starts.
+.TP
+.B XDG_CONFIG_HOME ", " XDG_STATE_HOME
+Where the config and the state files live (defaults
+.I ~/.config
+and
+.IR ~/.local/state ).
+.SH KEYS
+Press
+.B ?
+in tstui for every key. The most used:
+.TP
+.B enter
+On the server list: connect, or show the server's open session.
+.TP
+.B /
+Filter the server list, for example
+.BR "web env=prod" .
+.TP
+.B :
+Command palette:
+.BR :proxy ,
+.BR :cluster ,
+.BR :ssh ,
+.BR :scp ,
+.BR :pf ,
+.BR :exec ,
+.BR :skin ,
+.BR :quit .
+.TP
+.B p
+Proxy picker.
+.TP
+.B ctrl\-b
+In the terminal, the prefix key (config
+.BR keybindings.focus ).
+Then
+.B tab
+goes to the server list,
+.BR | " and " \-
+split,
+.B 1\-9
+picks a tab,
+.B d
+detaches and
+.B q
+quits.
+.TP
+.B alt\-1 ... alt\-9
+Switch tabs from anywhere.
+.TP
+.B q
+On the server list: quit (asks first while sessions are open).
+.SH FILES
+.TP
+.I ~/.config/tstui/config.yaml
+Configuration, mode 0600. See
+.I /usr/share/doc/tstui/examples/config.yaml
+for every key.
+.TP
+.I ~/.config/tstui/skins/NAME.yaml
+Skin files.
+.TP
+.I ~/.local/state/tstui/
+Remembered logins, the server-list cache for offline use, the transfer
+log, and the multi-exec audit log. All mode 0600.
+.SH EXIT STATUS
+0 on success, 1 on error, 2 on a usage error, 3 after an internal error
+(the report is on standard error), and 128 plus the signal number when
+stopped by SIGINT, SIGTERM or SIGHUP.
+.SH SEE ALSO
+.BR tsh (1)
+.PP
+https://goteleport.com/docs/

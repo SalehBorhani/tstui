@@ -1,0 +1,74 @@
+# tstui example configuration.
+#
+# Copy to ~/.config/tstui/config.yaml (or $XDG_CONFIG_HOME/tstui/config.yaml)
+# and run: chmod 600 ~/.config/tstui/config.yaml
+#
+# Every key is optional. Unknown keys are an error, so typos are caught.
+# tstui rewrites this file when you star a server, save a port forward or
+# pick a skin with :skin. Comments are lost then; the previous version is
+# kept as config.yaml.bak.
+
+# The proxy selected at start-up: a `name` from the list below.
+# Without it, tstui uses --proxy, $TSTUI_PROXY, or tsh's current profile.
+default_proxy: ast
+
+# Proxies you can switch to with `p`, `:proxy NAME` or a shortcut letter.
+# The tsh profiles in ~/.tsh are listed too, without any config.
+proxies:
+  - name: ast                      # letters, digits, '.', '_', '-'
+    addr: tp.ast.example.com:443   # host[:port][,sshport]; no https://
+    shortcut: a                    # one lowercase letter, unique
+    user: ali                      # Teleport user; else asked in the popup
+  - name: lab
+    addr: teleport.lab.example.com
+    shortcut: b
+    user: ali
+    auth: okta                     # auth connector, as for tsh --auth
+
+# Favorite servers per proxy name, pinned at the top of the list.
+# `f` on a server adds or removes it here.
+favorites:
+  ast:
+    - web-01
+    - web-02
+
+# Skin: default, light, high-contrast, or the name of a file in
+# ~/.config/tstui/skins/ (see examples/skins/). --skin overrides it.
+skin: default
+
+keybindings:
+  # The prefix key that gets you out of the terminal (tmux style).
+  # Ctrl-<letter> or Alt-<letter>. Default Ctrl-B.
+  focus: Ctrl-B
+
+terminal:
+  scrollback: 10000        # lines kept per session (0 to 1000000)
+  auto_reconnect: false    # restart a session that dropped
+  mouse: true              # mouse selection, wheel and clicks; Shift+drag still selects
+
+# Extra patterns for tsh login prompts and errors, tried before the
+# built-in ones (case-insensitive regular expressions, one output line at
+# a time). Only needed when your tsh words a prompt differently.
+# Kinds: password, otp, otp_or_tap, tap, pin, choice, key_tapped, sso_link,
+# locked, connector_not_found, wrong_credentials, tls, network.
+tsh_prompts:
+  otp:
+    - 'enter your authenticator code'
+
+# Saved port forwards, started from the :pf view. Each one runs
+# tsh ssh -N --forward=BIND:LPORT:HOST:RPORT login@host.
+port_forwards:
+  - name: pg
+    host: db-03
+    forward: 5432:localhost:5432       # [bind:]localport:remotehost:remoteport
+  - name: grafana
+    proxy: ast                         # config name or address; default: the current proxy
+    cluster: afr                       # leaf cluster; default: where the list finds the host
+    host: mon-01
+    login: ali                         # default: the login last used on that server
+    forward: 127.0.0.1:3000:localhost:3000
+
+# Multi-exec (:exec).
+exec:
+  concurrency: 5    # servers at once (1 to 50)
+  timeout: 60s      # per server

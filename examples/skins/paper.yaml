@@ -1,0 +1,15 @@
+# paper: warm tones for light terminal backgrounds, built on `light`.
+base: light
+colors:
+  fg: "#3b3a36"
+  border: "#a89f91"
+  border_focus: "#8b5e34"
+  title: "#8b5e34"
+  counter: "#6b4f9a"
+  info_label: "#b5651d"
+  info_value: "#1f1e1c"
+  table_cursor_fg: "#fdf6e3"
+  table_cursor_bg: "#8b5e34"
+  button_focus_bg: "#8b5e34"
+  logo_from: "#b5651d"
+  logo_to: "#6b4f9a"

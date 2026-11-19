@@ -1,0 +1,28 @@
+# mono: greys only, for terminals or eyes that prefer little colour.
+# Status colours (ok, warn, error) stay distinct so states remain readable.
+base: default
+colors:
+  fg: silver
+  border: gray
+  border_focus: white
+  title: white
+  counter: silver
+  info_label: gray
+  info_value: white
+  menu_key: white
+  menu_text: silver
+  table_fg: silver
+  table_header: white
+  table_cursor_fg: black
+  table_cursor_bg: silver
+  dialog_fg: silver
+  dialog_label: white
+  dialog_field: white
+  dialog_placeholder: gray
+  button_fg: black
+  button_bg: gray
+  button_focus_fg: black
+  button_focus_bg: white
+  info: white
+  logo_from: white
+  logo_to: gray

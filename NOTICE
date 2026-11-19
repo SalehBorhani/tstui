@@ -1,0 +1,7 @@
+tstui
+Copyright 2026
+
+This product includes third-party software. Its licenses are in
+THIRD_PARTY_LICENSES in the release archives and the .deb, and in
+vendor/ in the source. The patched terminal emulator in
+third_party/charmbracelet-x-vt keeps its own LICENSE.

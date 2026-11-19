@@ -1,0 +1,68 @@
+[
+  {
+    "kind": "node",
+    "version": "v2",
+    "metadata": {
+      "name": "0b6a1c3e-7d4f-4a51-9c1e-2f3a4b5c6d01",
+      "labels": {
+        "env": "prod",
+        "role": "web"
+      },
+      "expires": "2099-01-01T00:00:00Z",
+      "revision": "a1b2c3"
+    },
+    "spec": {
+      "addr": "10.0.1.11:3022",
+      "hostname": "web-01",
+      "rotation": {
+        "current_id": "",
+        "started": "0001-01-01T00:00:00Z",
+        "last_rotated": "0001-01-01T00:00:00Z",
+        "schedule": {
+          "update_clients": "0001-01-01T00:00:00Z",
+          "update_servers": "0001-01-01T00:00:00Z",
+          "standby": "0001-01-01T00:00:00Z"
+        }
+      },
+      "cmd_labels": {
+        "uptime": {
+          "period": "1m0s",
+          "command": ["uptime", "-p"],
+          "result": "up 3 weeks\n"
+        }
+      },
+      "version": "18.10.0"
+    }
+  },
+  {
+    "kind": "node",
+    "version": "v2",
+    "metadata": {
+      "name": "0b6a1c3e-7d4f-4a51-9c1e-2f3a4b5c6d02",
+      "labels": {
+        "env": "prod",
+        "role": "db"
+      }
+    },
+    "spec": {
+      "addr": "",
+      "hostname": "db-03",
+      "version": "18.10.0"
+    }
+  },
+  {
+    "kind": "node",
+    "version": "v2",
+    "metadata": {
+      "name": "0b6a1c3e-7d4f-4a51-9c1e-2f3a4b5c6d03",
+      "labels": {
+        "env": "stage"
+      }
+    },
+    "spec": {
+      "addr": "10.0.2.21:3022",
+      "hostname": "cache-01",
+      "version": "17.4.2"
+    }
+  }
+]

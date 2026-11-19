@@ -1,0 +1,128 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=vendor
+  # Never download a newer toolchain than go.mod asks for.
+  GOTOOLCHAIN: local
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false # vendored: nothing to download
+      - run: make vet
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.15.0
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: test (race detector, goleak)
+        run: make race
+
+  # The tests use PTYs and /bin/sh, which macOS has too, but they have not
+  # been run there yet: report failures without blocking.
+  test-macos:
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: make test
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [linux/amd64, linux/arm64, darwin/amd64, darwin/arm64]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags, for the version
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: build ${{ matrix.target }}
+        run: |
+          export GOOS=${TARGET%/*} GOARCH=${TARGET#*/}
+          make build
+          go version -m bin/tstui | grep -q 'CGO_ENABLED=0'
+          file bin/tstui
+        env:
+          TARGET: ${{ matrix.target }}
+
+  static-offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: make check-static
+      # GitHub's Ubuntu runners restrict unprivileged user namespaces; the
+      # script then falls back to GOPROXY=off with empty caches.
+      - run: make offline-build
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, test, build, static-offline]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: check the tag
+        run: |
+          version=$(scripts/version.sh)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "version $version does not match tag $GITHUB_REF_NAME"; exit 1; }
+          grep -q "^## \[$version\]" CHANGELOG.md || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+      # Plain binaries and .tar.gz for linux/amd64, linux/arm64,
+      # darwin/amd64 and darwin/arm64, .deb for Linux, and SHA256SUMS.
+      # No Windows build: the PTY layer is Unix-only.
+      - name: build artifacts
+        run: make release
+      - name: release notes from CHANGELOG.md
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          awk -v v="$version" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" v "]") == 1) { found = 1; next } }
+            found && !/^\[[^]]*\]: /' CHANGELOG.md >"$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "tstui ${GITHUB_REF_NAME#v}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            dist/*
