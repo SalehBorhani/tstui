@@ -135,10 +135,54 @@ func TestPaletteFilterCompletionHistory(t *testing.T) {
 	// An unknown command is reported in the footer.
 	h.command("sssh web-01")
 	h.waitScreen("did you mean ssh?")
-	// "/" opens the palette on the filter command.
+}
+
+func TestInteractiveSearch(t *testing.T) {
+	h := newExtrasHarness(t, []string{"ali"}, nil)
+	h.eventually("listed", func() bool { return len(h.visible()) == 3 })
+
+	// Every key narrows the list; no Enter needed.
 	h.typeText("/")
-	h.eventually("filter prefilled", func() bool { return h.app.cmdLine.GetText() == "filter " })
+	h.eventually("search open", func() bool { return h.app.searchOpen })
+	h.waitScreen("Search")
+	h.typeText("w")
+	h.eventually("narrowed on w", func() bool { return strings.Join(h.visible(), ",") == "web-01,web-02" })
+	h.typeText("eb-02")
+	h.eventually("narrowed on web-02", func() bool { return strings.Join(h.visible(), ",") == "web-02" })
+	h.key(tcell.KeyCtrlU)
+	h.eventually("widened again", func() bool { return len(h.visible()) == 3 })
+	h.typeText("env=prod")
+	h.eventually("label filter live", func() bool { return strings.Join(h.visible(), ",") == "web-01,db-03" })
+	h.waitScreen("2/3")
+
+	// Esc puts back the filter from before the search.
 	h.key(tcell.KeyEscape)
+	h.eventually("restored", func() bool { return !h.app.searchOpen && len(h.visible()) == 3 })
+
+	// Tab keeps the filter; / reopens with it typed in.
+	h.typeText("/")
+	h.eventually("search open", func() bool { return h.app.searchOpen })
+	h.typeText("db")
+	h.key(tcell.KeyTab)
+	h.eventually("kept", func() bool { return !h.app.searchOpen && strings.Join(h.visible(), ",") == "db-03" })
+	h.typeText("/")
+	h.eventually("prefilled", func() bool { return h.app.cmdLine.GetText() == "db" })
+	h.key(tcell.KeyEscape)
+	h.eventually("still kept", func() bool { return strings.Join(h.visible(), ",") == "db-03" })
+
+	// The arrows move the list while typing; Enter connects to the highlighted server.
+	h.typeText("/")
+	h.eventually("search open", func() bool { return h.app.searchOpen })
+	h.key(tcell.KeyCtrlU)
+	h.typeText("env=prod")
+	h.eventually("two left", func() bool { return len(h.visible()) == 2 })
+	h.key(tcell.KeyDown)
+	h.eventually("cursor moved", func() bool { return h.app.list.selectedHost() == "db-03" })
+	h.key(tcell.KeyEnter)
+	h.waitSpawned(1)
+	if spec := h.sp.Spec(0); spec.Host != "db-03" {
+		t.Fatalf("connected to %q, want db-03", spec.Host)
+	}
 }
 
 func TestPaletteSSH(t *testing.T) {
