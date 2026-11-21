@@ -263,7 +263,7 @@ func (a *App) openHelp() {
 	b.WriteString(h("Server list"))
 	for _, kv := range [][2]string{
 		{"enter", "connect (or show its open session)"}, {"n / shift-enter", "open another session"},
-		{"/", "filter servers (text, key=value, key!=value)"}, {":", "command palette"},
+		{"/", "search servers as you type (text, key=value, key!=value)"}, {":", "command palette"},
 		{"space", "mark / unmark server (for :exec)"}, {"a", "mark all shown servers (again: unmark)"},
 		{"f", "toggle favorite (pinned at the top)"}, {"N / A / C", "sort by name / address / cluster (again: reverse)"},
 		{"u / d", "upload / download files (scp)"},

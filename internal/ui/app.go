@@ -17,6 +17,7 @@ import (
 
 	"github.com/root-ali/tstui/internal/auth"
 	"github.com/root-ali/tstui/internal/config"
+	"github.com/root-ali/tstui/internal/filter"
 	"github.com/root-ali/tstui/internal/health"
 	"github.com/root-ali/tstui/internal/layout"
 	"github.com/root-ali/tstui/internal/multiexec"
@@ -152,7 +153,12 @@ type App struct {
 	cmdLine     *tview.InputField
 	history     *palette.History
 	paletteOpen bool
-	dialogName  string
+	// searchOpen is set while the command line is the interactive
+	// search bar (/); searchPrev is the filter to restore on Esc.
+	searchOpen bool
+	searchPrev filter.Filter
+	searchErr  string
+	dialogName string
 
 	toastKind, toastText string
 	toastColor           tcell.Color
@@ -893,7 +899,7 @@ func (a *App) onKey(ev *tcell.EventKey) *tcell.EventKey {
 		a.openPalette("")
 		return nil
 	case '/':
-		a.openPalette("filter " + a.list.filter.String())
+		a.openSearch()
 		return nil
 	case '?':
 		a.openHelp()

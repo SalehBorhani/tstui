@@ -12,7 +12,7 @@ Every feature runs `tsh` with an argument list (argv). Nothing you type is passe
 | `n`, `shift-enter` | Open another session |
 | `\|` / `-` | Open the server in a new pane right of / below the focused pane (see [Tabs, split panes and fullscreen](#tabs-split-panes-and-fullscreen)) |
 | `F` | Fullscreen terminal |
-| `/` | Filter servers (opens the palette on `:filter`) |
+| `/` | Search servers interactively: the list narrows as you type |
 | `:` | Command palette |
 | `space` | Mark or unmark the server (for `:exec`), then move down |
 | `a` | Mark every server the filter shows; press again to unmark them |
@@ -150,6 +150,18 @@ A filter is a list of terms separated by commas or spaces. A server must match e
 | `env=` | label `env` exists |
 
 The list title shows `[shown/total]` and the filter.
+
+`/` opens an interactive search bar, like `kubens` or `fzf`: the list narrows with every key, so there is nothing to submit. The bar starts with the current filter and accepts the same terms.
+
+| Key | In the search bar |
+|---|---|
+| `↑` `↓`, `ctrl-p` `ctrl-n`, `pgup` `pgdn` | Move the list's cursor |
+| `enter` | Keep the filter and connect to the highlighted server (`shift-enter`: a new session) |
+| `tab` | Keep the filter and go back to the list |
+| `esc` | Cancel: put back the filter from before |
+| `ctrl-u` | Clear the text |
+
+`:filter expr` sets a filter without the search bar.
 
 `f` stars a server. Favorites are pinned at the top and saved under `favorites:` in `config.yaml`, keyed by the proxy's config name. For a proxy that is not in the config (one known only from `~/.tsh`), favorites last for the current run only.
 
