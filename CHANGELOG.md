@@ -2,6 +2,12 @@
 
 All notable changes to tstui. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0]
+
+### Changed
+
+- `/` opens an interactive search, like `kubens` or `fzf`: the server list narrows as you type. The arrows move the cursor, `enter` connects to the highlighted server, `tab` keeps the filter and `esc` cancels.
+
 ## [0.1.0] - 2026-11-19
 
 The first release: a k9s-style terminal UI for Teleport SSH, built on `tsh`.

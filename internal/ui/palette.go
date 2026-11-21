@@ -22,8 +22,19 @@ func (a *App) newCmdLine() *tview.InputField {
 	in := tview.NewInputField().SetLabel("> ")
 	in.SetBorder(true).SetBorderPadding(0, 0, 1, 1)
 	a.styleCmdLine(in)
-	in.SetChangedFunc(func(string) { a.paletteHint() })
-	in.SetInputCapture(a.paletteKey)
+	in.SetChangedFunc(func(text string) {
+		if a.searchOpen {
+			a.searchChanged(text)
+		} else {
+			a.paletteHint()
+		}
+	})
+	in.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if a.searchOpen {
+			return a.searchKey(ev)
+		}
+		return a.paletteKey(ev)
+	})
 	return in
 }
 
@@ -32,7 +43,11 @@ func (a *App) styleCmdLine(in *tview.InputField) {
 		SetFieldBackgroundColor(tcell.ColorDefault)
 	in.SetFieldStyle(tcell.StyleDefault.Foreground(a.theme.DialogField).Background(tcell.ColorDefault))
 	in.SetBorderColor(a.theme.BorderFocus).SetTitleColor(a.theme.Title).SetBackgroundColor(a.theme.Bg)
-	in.SetTitle(" Command ")
+	if a.searchOpen {
+		in.SetLabel("/ ").SetTitle(" Search ")
+	} else {
+		in.SetLabel("> ").SetTitle(" Command ")
+	}
 }
 
 // openPalette opens the command line with initial typed in.
@@ -41,6 +56,7 @@ func (a *App) openPalette(initial string) {
 		return
 	}
 	a.history.Reset()
+	a.styleCmdLine(a.cmdLine) // the label and title of the command line or the search bar
 	a.cmdLine.SetText(initial)
 	a.mainFlex.ResizeItem(a.cmdLine, cmdLineHeight, 0)
 	a.paletteOpen = true
@@ -54,7 +70,7 @@ func (a *App) closePalette() {
 	if !a.paletteOpen {
 		return
 	}
-	a.paletteOpen = false
+	a.paletteOpen, a.searchOpen = false, false
 	a.mainFlex.ResizeItem(a.cmdLine, 0, 0)
 	a.layoutChrome()
 	a.dialog, a.dialogName = nil, ""
@@ -105,6 +121,10 @@ func (a *App) paletteSources() palette.Sources {
 // the footer while the palette is open.
 func (a *App) paletteHint() {
 	if !a.paletteOpen {
+		return
+	}
+	if a.searchOpen {
+		a.footer.view.SetText(a.searchHint())
 		return
 	}
 	text := a.cmdLine.GetText()
